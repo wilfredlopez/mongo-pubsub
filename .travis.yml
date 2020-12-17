@@ -1,0 +1,18 @@
+language: node_js
+node_js:
+  - 'node'
+  - 'lts/*'
+
+cache:
+  directories:
+    - node_modules
+
+before_install:
+  - docker run -d -p 27017:27017 -p 127.0.0.1:27017:27017 mongo:latest
+
+install:
+  - npm install
+
+services:
+  - docker
+  - mongodb
