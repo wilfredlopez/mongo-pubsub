@@ -4,24 +4,47 @@ import { MongoPubSub } from '../src/mongo-pubsub'
 const pubSub = new MongoPubSub()
 
 
+const subIds: number[] = []
 describe("subscribe", () => {
-    let subId: number
+    const KEY = 'Posts'
     it('shoud listen when subscribed', async (done) => {
-        const KEY = 'Posts'
         const Data = { text: 'Hello' }
 
-        subId = await pubSub.subscribe(KEY, (message) => {
+        const subId = await pubSub.subscribe(KEY, (message) => {
             expect(message.text).toBe(Data.text)
             done()
         })
+
+        subIds.push(subId)
 
         pubSub.publish(KEY, Data)
 
 
     })
 
+
+    it('can publish to multiple listeners', async (done) => {
+        const Data = { text: 'Hello There' }
+        const KEY2 = 'THERE'
+        const promises = [
+            pubSub.subscribe(KEY2, (message) => {
+                expect(message.text).toBe(Data.text)
+
+            }),
+            pubSub.subscribe(KEY2, (message) => {
+                expect(message.text).toBe(Data.text)
+            })
+        ]
+        const [id2, id3] = await Promise.all(promises)
+        pubSub.publish(KEY2, Data)
+        subIds.push(id2)
+        subIds.push(id3)
+        done()
+    })
     it('should unsubscribe', () => {
-        pubSub.unsubscribe(subId)
+        for (let id of subIds) {
+            pubSub.unsubscribe(id)
+        }
     })
 
     afterAll(async (done) => {
