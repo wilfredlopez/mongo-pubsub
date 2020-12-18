@@ -1,5 +1,7 @@
 import { $$asyncIterator } from 'iterall'
 import { PubSubEngine } from 'graphql-subscriptions'
+import { EventEmitter } from 'events'
+import { InsertOneWriteOpResult } from 'mongodb'
 
 /**
  * A class for digesting PubSubEngine events via the new AsyncIterator interface.
@@ -41,16 +43,41 @@ export class PubSubAsyncIterator<T> implements AsyncIterator<T> {
   private allSubscribed: Promise<number[]>
   private running: boolean
   private pubsub: PubSubEngine
-
-  constructor(pubsub: PubSubEngine, eventNames: string | string[]) {
+  eventEmitter?: EventEmitter
+  transformValue?: (ev: string, payload: any) => T
+  constructor(pubsub: PubSubEngine, eventNames: string | string[], eventEmitter?: EventEmitter, transformValue?: (ev: string, payload: any) => T) {
     this.pubsub = pubsub
     this.pullQueue = []
     this.pushQueue = []
     this.running = true
     this.allSubscribed = null as any
     this.eventsArray = typeof eventNames === 'string' ? [eventNames] : eventNames
+    this.eventEmitter = eventEmitter
+    this.addEventListeners()
+    this.transformValue = transformValue
   }
 
+
+  /**START CUSTOM */
+
+  addEventListeners = () => {
+    if (this.eventEmitter) {
+
+      for (const eventName of this.eventsArray) {
+        this.eventEmitter.addListener(eventName, this.pushValue)
+      }
+    }
+  }
+
+  removeEventListeners = () => {
+    if (this.eventEmitter) {
+
+      for (const eventName of this.eventsArray) {
+        this.eventEmitter.removeListener(eventName, this.pushValue)
+      }
+    }
+  }
+  /**END CUSTOM */
   public async next(): Promise<IteratorResult<T>> {
     if (!this.allSubscribed) { await (this.allSubscribed = this.subscribeAll()) }
     return this.pullValue()
@@ -70,15 +97,19 @@ export class PubSubAsyncIterator<T> implements AsyncIterator<T> {
     return this
   }
 
-  private async pushValue(event: T) {
+  private async pushValue(event: T, payload?: any) {
+    let value = event
+    if (this.transformValue) {
+      value = this.transformValue(event as any, payload!)
+    }
     await this.allSubscribed
     if (this.pullQueue.length !== 0) {
       this.pullQueue.shift()!(this.running
-        ? { value: event, done: false }
+        ? { value: value, done: false }
         : { value: undefined, done: true },
       )
     } else {
-      this.pushQueue.push(event)
+      this.pushQueue.push(value)
     }
   }
 
@@ -100,6 +131,7 @@ export class PubSubAsyncIterator<T> implements AsyncIterator<T> {
   private async emptyQueue() {
     if (this.running) {
       this.running = false
+      this.removeEventListeners()
       this.pullQueue.forEach(resolve => resolve({ value: undefined, done: true }))
       this.pullQueue.length = 0
       this.pushQueue.length = 0

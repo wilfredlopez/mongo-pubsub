@@ -10,7 +10,7 @@ describe("subscribe", () => {
     it('shoud listen when subscribed', async (done) => {
         const Data = { text: 'Hello' }
 
-        const subId = await pubSub.subscribe(KEY, (message) => {
+        const subId = await pubSub.subscribe(KEY, async (message) => {
             expect(message.text).toBe(Data.text)
             done()
         })
@@ -18,7 +18,6 @@ describe("subscribe", () => {
         subIds.push(subId)
 
         pubSub.publish(KEY, Data)
-
 
     })
 
@@ -45,10 +44,12 @@ describe("subscribe", () => {
         for (let id of subIds) {
             pubSub.unsubscribe(id)
         }
+
     })
 
     afterAll(async (done) => {
         await pubSub.close()
+
         done()
     })
 })
